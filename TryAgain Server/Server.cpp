@@ -46,7 +46,7 @@ int main()
 	//Verbindung initialisieren
 	memset(&addr,0,sizeof(SOCKADDR_IN));
 	addr.sin_family = AF_INET;
-	addr.sin_port = htons(12345);
+	addr.sin_port = htons(4444);
 	addr.sin_addr.s_addr = ADDR_ANY;
 	returnvalue = bind(acceptSocket,(SOCKADDR*)&addr,sizeof(SOCKADDR_IN));
 
@@ -57,7 +57,7 @@ int main()
 	}
 	else
 	{
-		printf("Socket an port 12345 gebunden\n");
+		printf("Socket an port 4444 gebunden\n");
 	}
 
 	//Verbindung bereitstellen
@@ -98,22 +98,6 @@ int main()
 		send(connectedSocket,buf,4095,0);
 		printf("\nNachricht gesendet!\n\n");
 
-		/*OVERLAPPED ovl = {0};
-		if (!ReadFile((HANDLE)connectedSocket, buf, 4095, NULL, &ovl))
-		{
-			DWORD err = GetLastError();
-			if (ERROR_IO_PENDING == err) {
-				if (!GetOverlappedResult((HANDLE)connectedSocket, &ovl, (LPDWORD)&returnvalue, TRUE))
-				{
-					returnvalue = SOCKET_ERROR;
-					printf("Overlapped I/O failed");
-				}
-			} else {
-				returnvalue = SOCKET_ERROR;
-				printf("ReadFile failed with last error %d\n", err);
-			}
-		} */
-
 		returnvalue = recv(connectedSocket,buf,4095,0);
 		if(returnvalue == 0 || returnvalue == SOCKET_ERROR)
 		{
@@ -124,12 +108,7 @@ int main()
 			buf[returnvalue]=0;
 			printf("Antwort: %s\n\n",buf);
 		}
-
-		//buf[returnvalue]=0;
-		//printf("Antwort: %s\n\n",buf);
 	}
-
-
 
 	//Programmende
 	printf("\n");

